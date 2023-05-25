@@ -17,68 +17,153 @@ void Log(const std::string& where, boost::system::error_code ec)
         << std::endl;
 }
 
-int main()
+void OnReceive(
+    // --> Start of shared data
+    boost::beast::flat_buffer& rBuffer,
+    // <-- End of shared data
+    const boost::system::error_code& ec
+)
 {
-    // Connection targets
-    const std::string url{ "ltnm.learncppthroughprojects.com" };
-    const std::string port{ "80" };
-    const std::string message{ "Hello WebSocket" };
-
-    // Always start with an I/O context object.
-    boost::asio::io_context ioc{};
-
-    // Under the hood, socket.connect uses I/O context to talk to the socket
-    // and get a response back. The response is saved in ec.
-    boost::system::error_code ec{};
-
-    // Resolve the endpoint.
-    tcp::resolver resolver{ ioc };
-    auto resolverIt{ resolver.resolve(url, port, ec) };
     if (ec) {
-        Log("resolver.resolve", ec);
-        return -1;
+        Log("OnReceive", ec);
+        return;
     }
 
-    // Connect the TCP socket.
-    tcp::socket socket{ ioc };
-    socket.connect(*resolverIt, ec);
+    // Print the echoed message.
+    std::cout << "ECHO: "
+        << boost::beast::make_printable(rBuffer.data())
+        << std::endl;
+}
+
+void OnSend(
+    // --> Start of shared data
+    websocket::stream<boost::beast::tcp_stream>& ws,
+    boost::beast::flat_buffer& rBuffer,
+    // <-- End of shared data
+    const boost::system::error_code& ec
+)
+{
     if (ec) {
-        Log("socket.connect", ec);
-        return -2;
+        Log("OnSend", ec);
+        return;
     }
 
-    // Tie the socket object to the WebSocket stream and attempt an handshake.
-    websocket::stream<boost::beast::tcp_stream> ws{ std::move(socket) };
-    ws.handshake(url, "/echo", ec);
+    // Read the echoed message back.
+    ws.async_read(rBuffer,
+        [&rBuffer](auto ec, auto nBytesRead) {
+            OnReceive(rBuffer, ec);
+        }
+    );
+}
+
+void OnHandshake(
+    // --> Start of shared data
+    websocket::stream<boost::beast::tcp_stream>& ws,
+    const boost::asio::const_buffer& wBuffer,
+    boost::beast::flat_buffer& rBuffer,
+    // <-- End of shared data
+    const boost::system::error_code& ec
+)
+{
     if (ec) {
-        Log("ws.handshake", ec);
-        return -3;
+        Log("OnHandshake", ec);
+        return;
     }
 
     // Tell the WebSocket object to exchange messages in text format.
     ws.text(true);
 
     // Send a message to the connected WebSocket server.
-    boost::asio::const_buffer wbuffer{ message.c_str(), message.size() };
-    ws.write(wbuffer, ec);
+    ws.async_write(wBuffer,
+        [&ws, &rBuffer](auto ec, auto nBytesWritten) {
+            OnSend(ws, rBuffer, ec);
+        }
+    );
+}
+
+void OnConnect(
+    // --> Start of shared data
+    websocket::stream<boost::beast::tcp_stream>& ws,
+    const std::string& url,
+    const std::string& endpoint,
+    const boost::asio::const_buffer& wBuffer,
+    boost::beast::flat_buffer& rBuffer,
+    // <-- End of shared data
+    const boost::system::error_code& ec
+)
+{
     if (ec) {
-        Log("ws.write", ec);
-        return -4;
+        Log("OnConnect", ec);
+        return;
     }
 
-    // Read the echoed message back.
-    boost::beast::flat_buffer rbuffer{};
-    ws.read(rbuffer, ec);
+    // Attempt a WebSocket handshake.
+    ws.async_handshake(url, endpoint,
+        [&ws, &wBuffer, &rBuffer](auto ec) {
+            OnHandshake(ws, wBuffer, rBuffer, ec);
+        }
+    );
+}
+
+void OnResolve(
+    // --> Start of shared data
+    websocket::stream<boost::beast::tcp_stream>& ws,
+    const std::string& url,
+    const std::string& endpoint,
+    const boost::asio::const_buffer& wBuffer,
+    boost::beast::flat_buffer& rBuffer,
+    // <-- End of shared data
+    const boost::system::error_code& ec,
+    tcp::resolver::iterator resolverIt
+)
+{
     if (ec) {
-        Log("ws.read", ec);
-        return 51;
+        Log("OnResolve", ec);
+        return;
     }
 
-    // Print the echoed message.
-    std::cout << "ECHO: "
-        << boost::beast::make_printable(rbuffer.data())
-        << std::endl;
+    // Connect to the TCP socket.
+    // Instead of constructing the socket and the ws objects separately, the
+    // socket is now embedded in ws, and we access it through next_layer().
+    ws.next_layer().async_connect(*resolverIt,
+        [&ws, &url, &endpoint, &wBuffer, &rBuffer](auto ec) {
+            OnConnect(ws, url, endpoint, wBuffer, rBuffer, ec);
+        }
+    );
+}
 
-    Log("returning", ec);
+int main()
+{
+    // Connection targets
+    const std::string url{ "ltnm.learncppthroughprojects.com" };
+    const std::string endpoint{ "/echo" };
+    const std::string port{ "80" };
+    const std::string message{ "Hello WebSocket" };
+
+    // Always start with an I/O context object.
+    boost::asio::io_context ioc{};
+
+    // Create the objects that will be shared by the connection callbacks.
+    websocket::stream<boost::beast::tcp_stream> ws{ ioc };
+    boost::asio::const_buffer wBuffer{ message.c_str(), message.size() };
+    boost::beast::flat_buffer rBuffer{};
+
+    // Resolve the endpoint.
+    tcp::resolver resolver{ ioc };
+    resolver.async_resolve(url, port,
+        [&ws, &url, &endpoint, &wBuffer, &rBuffer](auto ec, auto resolverIt) {
+            OnResolve(ws, url, endpoint, wBuffer, rBuffer, ec, resolverIt);
+        }
+    );
+
+    // We must call io_context::run for asynchronous callbacks to run.
+    ioc.run();
+
+    // We only succeed if the buffer contains the same message we sent out
+    // originally.
+    if (boost::beast::buffers_to_string(rBuffer.data()) != message) {
+        // rBuffer.data().size() == 0) {
+        return -1;
+    }
     return 0;
 }
