@@ -20,17 +20,23 @@ if(WIN32)
     get_win_ver(WINDOWS_VERSION)
 endif()
 
-set(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
+set(SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/websocket-client.cpp"
+)
 
 add_executable(network-monitor ${SOURCES})
 target_compile_features(network-monitor
     PRIVATE
-        #cxx_std_11
         cxx_std_14
 )
 target_compile_definitions(network-monitor
     PRIVATE
         $<$<PLATFORM_ID:Windows>:_WIN32_WINNT=${WINDOWS_VERSION}>
+)
+target_include_directories(network-monitor
+    PRIVATE
+        src
 )
 target_link_libraries(network-monitor
     PRIVATE
