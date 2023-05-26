@@ -20,14 +20,13 @@ if(WIN32)
     get_win_ver(WINDOWS_VERSION)
 endif()
 
-set(SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
+# Static library
+set(LIB_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/websocket-client.cpp"
 )
-
-add_executable(network-monitor ${SOURCES})
+add_library(network-monitor STATIC ${LIB_SOURCES})
 target_compile_features(network-monitor
-    PRIVATE
+    PUBLIC
         cxx_std_14
 )
 target_compile_definitions(network-monitor
@@ -35,10 +34,29 @@ target_compile_definitions(network-monitor
         $<$<PLATFORM_ID:Windows>:_WIN32_WINNT=${WINDOWS_VERSION}>
 )
 target_include_directories(network-monitor
-    PRIVATE
-        src
+    PUBLIC
+        inc
 )
 target_link_libraries(network-monitor
+    PUBLIC
+        Boost::Boost
+)
+
+# Tests
+set(TESTS_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/websocket-client.cpp"
+)
+add_executable(network-monitor-tests ${TESTS_SOURCES})
+target_compile_features(network-monitor-tests
     PRIVATE
+        cxx_std_14
+)
+target_compile_definitions(network-monitor-tests
+    PRIVATE
+        $<$<PLATFORM_ID:Windows>:_WIN32_WINNT=${WINDOWS_VERSION}>
+)
+target_link_libraries(network-monitor-tests
+    PRIVATE
+        network-monitor
         Boost::Boost
 )
