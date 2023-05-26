@@ -11,7 +11,10 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 if(EXISTS ${CMAKE_CURRENT_BINARY_DIR}/conaninfo.txt)
     list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_BINARY_DIR}")
 endif()
-find_package(Boost 1.74 REQUIRED COMPONENTS system)
+find_package(Boost 1.74 REQUIRED COMPONENTS system unit_test_framework)
+
+# Called before any other target is defined.
+enable_testing()
 
 # On Windows, we define a preprocessor symbol with the OS version to prevent
 # warnings from the Boost.Asio header files.
@@ -44,6 +47,7 @@ target_link_libraries(network-monitor
 
 # Tests
 set(TESTS_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/main.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/websocket-client.cpp"
 )
 add_executable(network-monitor-tests ${TESTS_SOURCES})
@@ -59,4 +63,13 @@ target_link_libraries(network-monitor-tests
     PRIVATE
         network-monitor
         Boost::Boost
+)
+add_test(
+    NAME network-monitor-tests
+    COMMAND $<TARGET_FILE:network-monitor-tests>
+)
+# This tells CMake to check for a specific output to verify the test outcome.
+# When all unit tests pass, Boost.Test prints "No errors detected".
+set_tests_properties(network-monitor-tests PROPERTIES
+    PASS_REGULAR_EXPRESSION ".*No errors detected"
 )

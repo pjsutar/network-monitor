@@ -1,13 +1,15 @@
 #include <network-monitor/websocket-client.h>
 
 #include <boost/asio.hpp>
+#include <boost/test/unit_test.hpp>
 
-#include <iostream>
 #include <string>
 
 using NetworkMonitor::WebSocketClient;
 
-int main()
+BOOST_AUTO_TEST_SUITE(network_monitor);
+
+BOOST_AUTO_TEST_CASE(class_WebSocketClient)
 {
     // Connection targets
     const std::string url{ "ltnm.learncppthroughprojects.com" };
@@ -26,8 +28,8 @@ int main()
     bool connected{ false };
     bool messageSent{ false };
     bool messageReceived{ false };
-    bool messageMatches{ false };
     bool disconnected{ false };
+    std::string echo{};
 
     // Our own callbacks
     auto onSend{ [&messageSent](auto ec) {
@@ -45,10 +47,9 @@ int main()
     auto onReceive{ [&client,
                       &onClose,
                       &messageReceived,
-                      &messageMatches,
-                      &message](auto ec, auto received) {
+                      &echo](auto ec, auto received) {
         messageReceived = !ec;
-        messageMatches = message == received;
+        echo = std::move(received);
         client.Close(onClose);
     } };
 
@@ -57,19 +58,11 @@ int main()
     ioc.run();
 
     // When we get here, the io_context::run function has run out of work to do.
-    bool ok{
-        connected &&
-        messageSent &&
-        messageReceived &&
-        messageMatches &&
-        disconnected
-    };
-    if (ok) {
-        std::cout << "OK" << std::endl;
-        return 0;
-    }
-    else {
-        std::cerr << "Test failed" << std::endl;
-        return 1;
-    }
+    BOOST_CHECK(connected);
+    BOOST_CHECK(messageSent);
+    BOOST_CHECK(messageReceived);
+    BOOST_CHECK(disconnected);
+    BOOST_CHECK_EQUAL(message, echo);
 }
+
+BOOST_AUTO_TEST_SUITE_END();
