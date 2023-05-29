@@ -2,6 +2,7 @@
 
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
+#include <boost/beast/ssl.hpp>
 #include <boost/system/error_code.hpp>
 
 #include <openssl/ssl.h>
@@ -33,12 +34,13 @@ WebSocketClient::WebSocketClient(
     const std::string& url,
     const std::string& endpoint,
     const std::string& port,
-    boost::asio::io_context& ioc
+    boost::asio::io_context& ioc,
+    boost::asio::ssl::context& ctx
 ) : url_{ url },
 endpoint_{ endpoint },
 port_{ port },
 resolver_{ boost::asio::make_strand(ioc) },
-ws_{ boost::asio::make_strand(ioc) }
+ws_{ boost::asio::make_strand(ioc), ctx }
 {
 }
 
@@ -112,12 +114,12 @@ void WebSocketClient::OnResolve(
     // The following timeout only matters for the purpose of connecting to the
     // TCP socket. We will reset the timeout to a sensible default after we are
     // connected.
-    ws_.next_layer().expires_after(std::chrono::seconds(5));
+    // Note: The TCP layer is the lowest layer (WebSocket -> TLS -> TCP).
+    boost::beast::get_lowest_layer(ws_).expires_after(std::chrono::seconds(5));
 
     // Connect to the TCP socket.
-    // Instead of constructing the socket and the ws objects separately, the
-    // socket is now embedded in ws_, and we access it through next_layer().
-    ws_.next_layer().async_connect(*resolverIt,
+    // Note: The TCP layer is the lowest layer (WebSocket -> TLS -> TCP).
+    boost::beast::get_lowest_layer(ws_).async_connect(*resolverIt,
         [this](auto ec) {
             OnConnect(ec);
         }
@@ -138,10 +140,36 @@ void WebSocketClient::OnConnect(
 
     // Now that the TCP socket is connected, we can reset the timeout to
     // whatever Boost.Beast recommends.
-    ws_.next_layer().expires_never();
+    // Note: The TCP layer is the lowest layer (WebSocket -> TLS -> TCP).
+    boost::beast::get_lowest_layer(ws_).expires_never();
     ws_.set_option(websocket::stream_base::timeout::suggested(
         boost::beast::role_type::client
     ));
+
+    // Some clients require that we set the host name before the TLS handshake
+    // or the connection will fail. We use an OpenSSL function for that.
+    SSL_set_tlsext_host_name(ws_.next_layer().native_handle(), url_.c_str());
+
+    // Attempt a TLS handshake.
+    // Note: The TLS layer is the next layer (WebSocket -> TLS -> TCP).
+    ws_.next_layer().async_handshake(boost::asio::ssl::stream_base::client,
+        [this](auto ec) {
+            OnTlsHandshake(ec);
+        }
+    );
+}
+
+void WebSocketClient::OnTlsHandshake(
+    const boost::system::error_code& ec
+)
+{
+    if (ec) {
+        Log("OnTlsHandshake", ec);
+        if (onConnect_) {
+            onConnect_(ec);
+        }
+        return;
+    }
 
     // Attempt a WebSocket handshake.
     ws_.async_handshake(url_, endpoint_,

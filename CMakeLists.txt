@@ -25,6 +25,13 @@ if(WIN32)
     get_win_ver(WINDOWS_VERSION)
 endif()
 
+# Set compiler flags to prevent object file format limit error
+if (MSVC)
+  add_compile_options(/bigobj)
+else ()
+  add_compile_options(-Wa,-mbig-obj)
+endif ()
+
 # Static library
 set(LIB_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/websocket-client.cpp"
@@ -67,6 +74,7 @@ target_link_libraries(network-monitor-tests
     PRIVATE
         network-monitor
         Boost::Boost
+        OpenSSL::OpenSSL
         std::filesystem
 )
 add_test(
