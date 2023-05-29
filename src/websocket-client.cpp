@@ -4,6 +4,8 @@
 #include <boost/beast.hpp>
 #include <boost/system/error_code.hpp>
 
+#include <openssl/ssl.h>
+
 #include <chrono>
 #include <functional>
 #include <iomanip>
