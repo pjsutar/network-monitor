@@ -14,6 +14,7 @@ endif()
 find_package(Boost 1.74 REQUIRED COMPONENTS system unit_test_framework)
 find_package(CURL REQUIRED)
 find_package(Filesystem REQUIRED)
+find_package(nlohmann_json REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 # Called before any other target is defined.
@@ -54,6 +55,7 @@ target_include_directories(network-monitor
 target_link_libraries(network-monitor
     PUBLIC
         Boost::Boost
+        nlohmann_json::nlohmann_json
         OpenSSL::OpenSSL
         std::filesystem
     PRIVATE
@@ -74,6 +76,7 @@ target_compile_features(network-monitor-tests
 target_compile_definitions(network-monitor-tests
     PRIVATE
         TESTS_CACERT_PEM="${CMAKE_CURRENT_SOURCE_DIR}/tests/cacert.pem"
+        TESTS_NETWORK_LAYOUT_JSON="${CMAKE_CURRENT_SOURCE_DIR}/tests/network-layout.json"
         $<$<PLATFORM_ID:Windows>:_WIN32_WINNT=${WINDOWS_VERSION}>
 )
 target_link_libraries(network-monitor-tests
