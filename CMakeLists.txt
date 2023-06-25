@@ -77,6 +77,7 @@ target_compile_features(network-monitor-tests
 )
 target_compile_definitions(network-monitor-tests
     PRIVATE
+        TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/tests/test-data"
         TESTS_CACERT_PEM="${CMAKE_CURRENT_SOURCE_DIR}/tests/cacert.pem"
         TESTS_NETWORK_LAYOUT_JSON="${CMAKE_CURRENT_SOURCE_DIR}/tests/network-layout.json"
         $<$<PLATFORM_ID:Windows>:_WIN32_WINNT=${WINDOWS_VERSION}>
