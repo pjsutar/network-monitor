@@ -1,22 +1,76 @@
+#include "boost-mock.h"
+
 #include <network-monitor/websocket-client.h>
 
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/test/unit_test.hpp>
 
+#include <chrono>
 #include <filesystem>
+#include <mutex>
 #include <string>
 
 using NetworkMonitor::BoostWebSocketClient;
 
+using NetworkMonitor::MockResolver;
+using NetworkMonitor::TestWebSocketClient;
+
+// This fixture is used to re-initialize all mock properties before a test.
+struct WebSocketClientTestFixture {
+    WebSocketClientTestFixture()
+    {
+        MockResolver::resolveEc = {};
+    }
+};
+
+// Use this to set a timeout on tests that may hang or suffer from a slow
+// connection.
+using timeout = boost::unit_test::timeout;
+
 BOOST_AUTO_TEST_SUITE(network_monitor);
+
+BOOST_AUTO_TEST_SUITE(class_WebSocketClient);
 
 BOOST_AUTO_TEST_CASE(cacert_pem)
 {
     BOOST_CHECK(std::filesystem::exists(TESTS_CACERT_PEM));
 }
 
-BOOST_AUTO_TEST_CASE(class_WebSocketClient)
+BOOST_FIXTURE_TEST_SUITE(Connect, WebSocketClientTestFixture);
+
+BOOST_AUTO_TEST_CASE(fail_resolve, *timeout{ 1 })
+{
+    // We use the mock client so we don't really connect to the target.
+    const std::string url{ "some.echo-server.com" };
+    const std::string endpoint{ "/" };
+    const std::string port{ "443" };
+
+    boost::asio::ssl::context ctx{ boost::asio::ssl::context::tlsv12_client };
+    ctx.load_verify_file(TESTS_CACERT_PEM);
+    boost::asio::io_context ioc{};
+
+    // Set the expected error codes.
+    MockResolver::resolveEc = boost::asio::error::host_not_found;
+
+    TestWebSocketClient client{ url, endpoint, port, ioc, ctx };
+    bool calledOnConnect{ false };
+    auto onConnect{ [&calledOnConnect](auto ec) {
+        calledOnConnect = true;
+        BOOST_CHECK_EQUAL(ec, boost::asio::error::host_not_found);
+    } };
+    client.Connect(onConnect);
+    ioc.run();
+
+    // When we get here, the io_context::run function has run out of work to do.
+    BOOST_CHECK(calledOnConnect);
+}
+
+BOOST_AUTO_TEST_SUITE_END(); // Connect
+
+BOOST_AUTO_TEST_SUITE(live);
+
+BOOST_AUTO_TEST_CASE(echo, *timeout{ 20 })
 {
     // Connection targets
     const std::string url{ "ltnm.learncppthroughprojects.com" };
@@ -86,7 +140,7 @@ bool CheckResponse(const std::string& response)
     return ok;
 }
 
-BOOST_AUTO_TEST_CASE(send_stomp_frame)
+BOOST_AUTO_TEST_CASE(network_events, *timeout{ 3 })
 {
     // Connection targets
     const std::string url{ "ltnm.learncppthroughprojects.com" };
@@ -158,4 +212,8 @@ BOOST_AUTO_TEST_CASE(send_stomp_frame)
     BOOST_CHECK(CheckResponse(response));
 }
 
-BOOST_AUTO_TEST_SUITE_END();
+BOOST_AUTO_TEST_SUITE_END(); // live
+
+BOOST_AUTO_TEST_SUITE_END(); // class_WebSocketClient
+
+BOOST_AUTO_TEST_SUITE_END(); // network_monitor
