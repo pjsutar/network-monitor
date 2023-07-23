@@ -27,18 +27,10 @@ if(WIN32)
     get_win_ver(WINDOWS_VERSION)
 endif()
 
-# Set compiler flags to prevent object file format limit error
-if (MSVC)
-  add_compile_options(/bigobj)
-else ()
-  add_compile_options(-Wa,-mbig-obj)
-endif ()
-
 # Static library
 set(LIB_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/file-downloader.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transport-network.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/websocket-client.cpp"
 )
 add_library(network-monitor STATIC ${LIB_SOURCES})
 target_compile_features(network-monitor
@@ -81,6 +73,10 @@ target_compile_definitions(network-monitor-tests
         TESTS_CACERT_PEM="${CMAKE_CURRENT_SOURCE_DIR}/tests/cacert.pem"
         TESTS_NETWORK_LAYOUT_JSON="${CMAKE_CURRENT_SOURCE_DIR}/tests/network-layout.json"
         $<$<PLATFORM_ID:Windows>:_WIN32_WINNT=${WINDOWS_VERSION}>
+)
+target_compile_options(network-monitor-tests
+    PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/bigobj>
 )
 target_link_libraries(network-monitor-tests
     PRIVATE
