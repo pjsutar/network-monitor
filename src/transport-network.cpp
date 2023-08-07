@@ -36,6 +36,23 @@ bool Line::operator==(const Line& other) const
     return id == other.id;
 }
 
+// PassengerEvent — Free functions
+
+void NetworkMonitor::from_json(
+    const nlohmann::json& src,
+    PassengerEvent& dst
+)
+{
+    dst.stationId = src.at("station_id").get<std::string>();
+    dst.type = src.at("passenger_event").get<std::string>() == "in" ?
+        PassengerEvent::Type::In : PassengerEvent::Type::Out;
+
+    // We exclude the final 'Z' when parsing the datetime string.
+    auto datetimeZ{ src.at("datetime").get<std::string>() };
+    auto datetime{ datetimeZ.substr(0, datetimeZ.size() - 1) };
+    dst.timestamp = boost::posix_time::from_iso_extended_string(datetime);
+}
+
 // TransportNetwork — Public methods
 
 TransportNetwork::TransportNetwork() = default;

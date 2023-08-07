@@ -30,7 +30,9 @@ endif()
 
 # Static library
 set(LIB_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/env.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/file-downloader.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/network-monitor.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/stomp-client.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/stomp-frame.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transport-network.cpp"
@@ -63,6 +65,7 @@ target_link_libraries(network-monitor
 set(TESTS_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/file-downloader.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/main.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/network-monitor.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/stomp-client.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/stomp-frame.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/transport-network.cpp"
@@ -102,4 +105,44 @@ add_test(
 # When all unit tests pass, Boost.Test prints "No errors detected".
 set_tests_properties(network-monitor-tests PROPERTIES
     PASS_REGULAR_EXPRESSION ".*No errors detected"
+)
+
+# Executable
+set(EXE_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
+)
+add_executable(network-monitor-exe ${EXE_SOURCES})
+target_compile_features(network-monitor-exe
+    PRIVATE
+        cxx_std_17
+)
+target_compile_definitions(network-monitor-exe
+    PRIVATE
+        $<$<PLATFORM_ID:Windows>:_WIN32_WINNT=${WINDOWS_VERSION}>
+)
+target_compile_options(network-monitor-exe
+    PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/bigobj>
+)
+target_link_libraries(network-monitor-exe
+    PRIVATE
+        network-monitor
+)
+add_test(
+    NAME network-monitor-exe-tests
+    COMMAND $<TARGET_FILE:network-monitor-exe>
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+)
+# These options define the pass/fail condition for the test.
+set_tests_properties(network-monitor-exe-tests PROPERTIES
+    # This affects the duration of the io_context::run function.
+    ENVIRONMENT "LTNM_TIMEOUT_MS=5000"
+
+    # We introduce a timeout just to be safe.
+    # This should be longer than LTNM_TIMEOUT_MS.
+    TIMEOUT 10
+
+    # We verify the content of the program log output. Any error message is a
+    # test failure.
+    FAIL_REGULAR_EXPRESSION "\\[error\\]"
 )
