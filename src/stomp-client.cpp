@@ -32,6 +32,8 @@ static const auto gStompClientErrorStrings{
                            "CouldNotConnectToWebSocketServer"  },
         {StompClientError::kCouldNotParseMessageAsStompFrame  ,
                            "CouldNotParseMessageAsStompFrame"  },
+        {StompClientError::kCouldNotSendMessage               ,
+                           "CouldNotSendMessage"               },
         {StompClientError::kCouldNotSendStompFrame            ,
                            "CouldNotSendStompFrame"            },
         {StompClientError::kCouldNotSendSubscribeFrame        ,

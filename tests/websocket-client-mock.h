@@ -110,6 +110,11 @@ namespace NetworkMonitor {
             boost::asio::ssl::context& ctx
         );
 
+        static std::string GetMockSendFrame(
+            const std::string& destination,
+            const std::string& messageContent
+        );
+
     private:
         StompFrame MakeConnectedFrame();
 

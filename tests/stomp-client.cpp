@@ -8,6 +8,8 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/test/unit_test.hpp>
 
+#include <nlohmann/json.hpp>
+
 #include <string>
 
 using NetworkMonitor::BoostWebSocketClient;
@@ -57,6 +59,7 @@ BOOST_AUTO_TEST_CASE(ostream)
         StompClientError::kCouldNotCloseWebSocketConnection,
         StompClientError::kCouldNotConnectToWebSocketServer,
         StompClientError::kCouldNotParseMessageAsStompFrame,
+        StompClientError::kCouldNotSendMessage,
         StompClientError::kCouldNotSendStompFrame,
         StompClientError::kCouldNotSendSubscribeFrame,
         StompClientError::kUnexpectedCouldNotCreateValidFrame,
@@ -208,7 +211,7 @@ BOOST_AUTO_TEST_CASE(fail_to_connect_auth, *timeout{ 1 })
             StompClientError::kWebSocketServerDisconnected
         );
     } };
-    client.Connect(username, password, onConnect, onDisconnect);
+    client.Connect(username, password, onConnect, nullptr, onDisconnect);
     ioc.run();
     BOOST_CHECK(calledOnDisconnect);
 }
@@ -535,6 +538,169 @@ BOOST_AUTO_TEST_CASE(subscribe_after_close, *timeout{ 1 })
     BOOST_CHECK(calledOnSubscribe);
 }
 
+BOOST_AUTO_TEST_CASE(send, *timeout{ 1 })
+{
+    // Since we use the mock, we do not actually connect to this remote.
+    const std::string url{ "ltnm.learncppthroughprojects.com" };
+    const std::string endpoint{ "/network-events" };
+    const std::string port{ "443" };
+    const std::string username{ "some_username" };
+    const std::string password{ "some_password_123" };
+    const nlohmann::json message{
+        {"msg", "Hello world"},
+    };
+    boost::asio::io_context ioc{};
+    boost::asio::ssl::context ctx{ boost::asio::ssl::context::tlsv12_client };
+    ctx.load_verify_file(TESTS_CACERT_PEM);
+
+    StompClient<MockWebSocketClientForStomp> client{
+        url,
+        endpoint,
+        port,
+        ioc,
+        ctx
+    };
+    bool calledOnSend{ false };
+    std::string requestId{};
+    auto onSend{ [
+        &calledOnSend,
+        &requestId,
+        &client
+    ](auto ec, auto&& id) {
+        calledOnSend = true;
+        BOOST_CHECK_EQUAL(ec, StompClientError::kOk);
+        BOOST_CHECK(id.size() > 0);
+        BOOST_CHECK_EQUAL(id, requestId);
+        client.Close();
+    } };
+    auto onConnect{ [&client, &requestId, &message, &onSend](auto ec) {
+        BOOST_REQUIRE_EQUAL(ec, StompClientError::kOk);
+        requestId = client.Send("/quiet-route", message.dump(), onSend);
+        BOOST_CHECK(requestId.size() > 0);
+    } };
+    bool calledOnDisconnect{ false };
+    auto onDisconnect{ [&calledOnDisconnect](auto ec) {
+        calledOnDisconnect = true;
+    } };
+    client.Connect(username, password, onConnect, nullptr, onDisconnect);
+    ioc.run();
+    BOOST_CHECK(calledOnSend);
+    BOOST_CHECK(!calledOnDisconnect);
+}
+
+BOOST_AUTO_TEST_CASE(send_fail, *timeout{ 1 })
+{
+    // Since we use the mock, we do not actually connect to this remote.
+    const std::string url{ "ltnm.learncppthroughprojects.com" };
+    const std::string endpoint{ "/network-events" };
+    const std::string port{ "443" };
+    const std::string username{ "some_username" };
+    const std::string password{ "some_password_123" };
+    const nlohmann::json message{
+        {"msg", "Hello world"},
+    };
+    boost::asio::io_context ioc{};
+    boost::asio::ssl::context ctx{ boost::asio::ssl::context::tlsv12_client };
+    ctx.load_verify_file(TESTS_CACERT_PEM);
+
+    StompClient<MockWebSocketClientForStomp> client{
+        url,
+        endpoint,
+        port,
+        ioc,
+        ctx
+    };
+    bool calledOnSend{ false };
+    std::string requestId{};
+    auto onSend{ [
+        &calledOnSend,
+        &requestId,
+        &client
+    ](auto ec, auto&& id) {
+        calledOnSend = true;
+        BOOST_CHECK_EQUAL(ec, StompClientError::kCouldNotSendMessage);
+        BOOST_CHECK(id.size() > 0);
+        BOOST_CHECK_EQUAL(id, requestId);
+        client.Close();
+    } };
+    auto onConnect{ [&client, &requestId, &message, &onSend](auto ec) {
+        BOOST_REQUIRE_EQUAL(ec, StompClientError::kOk);
+
+        // We should not set the mock error code earlier, as this would affect
+        // the initial STOMP frame used to establish the connection.
+        MockWebSocketClientForStomp::sendEc = boost::asio::error::message_size;
+
+        requestId = client.Send("/quiet-route", message.dump(), onSend);
+        BOOST_CHECK(requestId.size() > 0);
+    } };
+    bool calledOnDisconnect{ false };
+    auto onDisconnect{ [&calledOnDisconnect](auto ec) {
+        calledOnDisconnect = true;
+    } };
+    client.Connect(username, password, onConnect, nullptr, onDisconnect);
+    ioc.run();
+    BOOST_CHECK(calledOnSend);
+    BOOST_CHECK(!calledOnDisconnect);
+}
+
+BOOST_AUTO_TEST_CASE(receive_message, *timeout{ 1 })
+{
+    // Since we use the mock, we do not actually connect to this remote.
+    const std::string url{ "ltnm.learncppthroughprojects.com" };
+    const std::string endpoint{ "/network-events" };
+    const std::string port{ "443" };
+    const std::string username{ "some_username" };
+    const std::string password{ "some_password_123" };
+    const std::string destination{ "/msg-destination" };
+    const nlohmann::json message{
+        {"msg", "Hello world"},
+    };
+    boost::asio::io_context ioc{};
+    boost::asio::ssl::context ctx{ boost::asio::ssl::context::tlsv12_client };
+    ctx.load_verify_file(TESTS_CACERT_PEM);
+
+    StompClient<MockWebSocketClientForStomp> client{
+        url,
+        endpoint,
+        port,
+        ioc,
+        ctx
+    };
+    bool calledOnMessage{ false };
+    std::string requestId{};
+    auto onMessage{ [
+        &calledOnMessage,
+        &destination,
+        &message,
+        &client
+    ](auto ec, auto&& dst, auto&& msg) {
+        calledOnMessage = true;
+        BOOST_CHECK_EQUAL(ec, StompClientError::kOk);
+        BOOST_CHECK_EQUAL(dst, destination);
+        BOOST_CHECK_EQUAL(msg, message.dump());
+        client.Close();
+    } };
+    auto onConnect{ [&destination, &message](auto ec) {
+        BOOST_REQUIRE_EQUAL(ec, StompClientError::kOk);
+
+        // Trigger the message from the server.
+        MockWebSocketClientForStomp::messageQueue.push(
+            MockWebSocketClientForStomp::GetMockSendFrame(
+                destination,
+                message.dump()
+            )
+        );
+    } };
+    bool calledOnDisconnect{ false };
+    auto onDisconnect{ [&calledOnDisconnect](auto ec) {
+        calledOnDisconnect = true;
+    } };
+    client.Connect(username, password, onConnect, onMessage, onDisconnect);
+    ioc.run();
+    BOOST_CHECK(calledOnMessage);
+    BOOST_CHECK(!calledOnDisconnect);
+}
+
 BOOST_AUTO_TEST_CASE(subscribe_to_invalid_endpoint, *timeout{ 1 })
 {
     // Since we use the mock, we do not actually connect to this remote.
@@ -570,12 +736,12 @@ BOOST_AUTO_TEST_CASE(subscribe_to_invalid_endpoint, *timeout{ 1 })
         BOOST_REQUIRE_EQUAL(ec, StompClientError::kOk);
         client.Subscribe("/invalid", onSubscribe, nullptr);
     } };
-    client.Connect(username, password, onConnect, onDisconnect);
+    client.Connect(username, password, onConnect, nullptr, onDisconnect);
     ioc.run();
     BOOST_CHECK(calledOnDisconnect);
 }
 
-BOOST_AUTO_TEST_CASE(live, *timeout{ 5 })
+BOOST_AUTO_TEST_CASE(live, *timeout{ 3 })
 {
     const std::string url{ GetEnvVar(
         "LTNM_SERVER_URL",

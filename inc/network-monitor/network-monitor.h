@@ -173,7 +173,8 @@ namespace NetworkMonitor {
                 [this](auto ec) {
                     OnNetworkEventsConnect(ec);
                 },
-                [this](auto ec) {
+                nullptr,
+                    [this](auto ec) {
                     OnNetworkEventsDisconnect(ec);
                 }
                 );
