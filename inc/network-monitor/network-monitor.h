@@ -3,6 +3,8 @@
 
 #include <network-monitor/file-downloader.h>
 #include <network-monitor/stomp-client.h>
+#include <network-monitor/stomp-server.h>
+#include <network-monitor/test-server-certificate.h>
 #include <network-monitor/transport-network.h>
 
 #include <boost/asio.hpp>
@@ -14,12 +16,15 @@
 #include <nlohmann/json.hpp>
 
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <iomanip>
 #include <memory>
 #include <ostream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace NetworkMonitor {
 
@@ -33,6 +38,12 @@ namespace NetworkMonitor {
         std::string networkEventsPassword{};
         std::filesystem::path caCertFile{};
         std::filesystem::path networkLayoutFile{};
+        std::string quietRouteHostname{ "localhost" };
+        std::string quietRouteIp{ "127.0.0.1" };
+        unsigned short quietRoutePort{ 8042 };
+        double quietRouteMaxSlowdownPc{ 0.1 };
+        double quietRouteMinQuietnessPc{ 0.1 };
+        size_t quietRouteMaxNPaths{ 20 };
     };
 
     /*! \brief Error codes for the Live Transport Network Monitor process.
@@ -42,7 +53,9 @@ namespace NetworkMonitor {
         kUndefinedError,
         kCouldNotConnectToStompClient,
         kCouldNotParsePassengerEvent,
+        kCouldNotParseQuietRouteRequest,
         kCouldNotRecordPassengerEvent,
+        kCouldNotStartStompServer,
         kCouldNotSubscribeToPassengerEvents,
         kFailedNetworkLayoutFileDownload,
         kFailedNetworkLayoutFileParsing,
@@ -50,6 +63,8 @@ namespace NetworkMonitor {
         kMissingCaCertFile,
         kMissingNetworkLayoutFile,
         kStompClientDisconnected,
+        kStompServerClientDisconnected,
+        kStompServerDisconnected,
     };
 
     /*! \brief Print operator for the `NetworkMonitorError` class.
@@ -68,8 +83,9 @@ namespace NetworkMonitor {
     /*! \brief Live Transport Network Monitor
      *
      *  \tparam WsClient Type compatible with WebSocketClient.
+     *  \tparam WsServer Type compatible with WebSocketServer.
      */
-    template <typename WsClient>
+    template <typename WsClient, typename WsServer>
     class NetworkMonitor {
     public:
         /*! \brief Default constructor.
@@ -179,6 +195,37 @@ namespace NetworkMonitor {
                 }
                 );
 
+            // STOMP server
+            spdlog::info("NetworkMonitor: Constructing the STOMP server: {}:{}",
+                config.quietRouteHostname, config.quietRoutePort);
+            serverCtx_.load_verify_file(config.caCertFile.string());
+            LoadTestServerCertificate(serverCtx_);
+            server_ = std::make_shared<StompServer<WsServer>>(
+                config.quietRouteHostname,
+                config.quietRouteIp,
+                config.quietRoutePort,
+                ioc_,
+                serverCtx_
+            );
+            auto serverEc{ server_->Run(
+                [this](auto ec, auto id) {
+                    OnQuietRouteClientConnect(ec, id);
+                },
+                [this](auto ec, auto id, auto dest, auto reqId, auto&& msg) {
+                    OnQuietRouteClientMessage(ec, id, dest, reqId, std::move(msg));
+                },
+                [this](auto ec, auto id) {
+                    OnQuietRouteClientDisconnect(ec, id);
+                },
+                [this](auto ec) {
+                    OnQuietRouteDisconnect(ec);
+                }
+            ) };
+            if (serverEc != StompServerError::kOk) {
+                spdlog::error("NetworkMonitor: Could not start STOMP server");
+                return NetworkMonitorError::kCouldNotStartStompServer;
+            }
+
             // Note: At this stage nothing runs until someone calls the run()
             //       function on the I/O context object.
             spdlog::info("NetworkMonitor: Successfully configured");
@@ -239,6 +286,15 @@ namespace NetworkMonitor {
             return lastErrorCode_;
         }
 
+        /*! \brief Get the latest recorder travel route.
+         *
+         *  This is the last travel route calculated — if any.
+         */
+        TravelRoute GetLastTravelRoute() const
+        {
+            return lastTravelRoute_;
+        }
+
         /*! \brief Access the internal network representation.
          *
          *  \returns a reference to the internal `TransportNetwork` object instance.
@@ -249,27 +305,60 @@ namespace NetworkMonitor {
             return network_;
         }
 
+        /*! \brief Set the network representation crowding..
+         *
+         *  This method can be used when testing to pre-seed the network with the
+         *  desired crowding.
+         */
+        void SetNetworkCrowding(
+            const std::unordered_map<Id, int>& passengerCounts
+        )
+        {
+            for (const auto& [stationId, passengerCount] : passengerCounts) {
+                auto type{ passengerCount > 0 ? PassengerEvent::Type::In :
+                                                PassengerEvent::Type::Out };
+                for (size_t _{ 0 }; _ < std::abs(passengerCount); ++_) {
+                    network_.RecordPassengerEvent({ stationId, type, {} });
+                }
+            }
+        }
+
+        /*! \brief Access the list of connected clients.
+         */
+        const std::unordered_set<std::string>& GetConnectedClients() const
+        {
+            return connectedClients_;
+        }
+
     private:
         // We maintain our own instance of the I/O and TLS contexts.
         boost::asio::io_context ioc_{};
         boost::asio::ssl::context clientCtx_{
             boost::asio::ssl::context::tlsv12_client
         };
+        boost::asio::ssl::context serverCtx_{
+            boost::asio::ssl::context::tlsv12_server
+        };
 
         // We keep the client and server as shared pointers to allow a default
         // constructor.
         std::shared_ptr<StompClient<WsClient>> client_{ nullptr };
+        std::shared_ptr<StompServer<WsServer>> server_{ nullptr };
 
         NetworkMonitorConfig config_{};
 
         TransportNetwork network_{};
 
+        std::unordered_set<std::string> connectedClients_{};
+
         NetworkMonitorError lastErrorCode_{ NetworkMonitorError::kUndefinedError };
+        TravelRoute lastTravelRoute_{};
 
         // Remote endpoints
         const std::string networkEventsEndpoint_{ "/network-events" };
         const std::string networkLayoutEndpoint_{ "/network-layout.json" };
         const std::string subscriptionDestination_{ "/passengers" };
+        const std::string quietRouteDestination{ "/quiet-route" };
 
         // Handlers
 
@@ -283,6 +372,7 @@ namespace NetworkMonitor {
                     ec);
                 lastErrorCode_ = Error::kCouldNotConnectToStompClient;
                 client_->Close();
+                server_->Stop();
                 return;
             }
             spdlog::info("NetworkMonitor: STOMP client connected");
@@ -305,6 +395,7 @@ namespace NetworkMonitor {
                 );
                 lastErrorCode_ = Error::kCouldNotSubscribeToPassengerEvents;
                 client_->Close();
+                server_->Stop();
             }
             lastErrorCode_ = Error::kOk;
         }
@@ -331,8 +422,8 @@ namespace NetworkMonitor {
             else {
                 spdlog::info("NetworkMonitor: STOMP client subscribed to {}",
                     subscriptionDestination_);
+                lastErrorCode_ = Error::kOk;
             }
-            lastErrorCode_ = Error::kOk;
         }
 
         void OnNetworkEventsMessage(
@@ -368,6 +459,92 @@ namespace NetworkMonitor {
                 boost::posix_time::to_iso_extended_string(event.timestamp)
             );
             lastErrorCode_ = Error::kOk;
+        }
+
+        void OnQuietRouteClientConnect(
+            StompServerError ec,
+            const std::string& connectionId
+        )
+        {
+            spdlog::info("NetworkMonitor: [{}] Connected to quiet-route",
+                connectionId);
+            connectedClients_.insert(connectionId);
+            lastErrorCode_ = NetworkMonitorError::kOk;
+        }
+
+        void OnQuietRouteClientMessage(
+            StompServerError ec,
+            const std::string& connectionId,
+            const std::string& destination,
+            const std::string& requestId,
+            std::string&& message
+        )
+        {
+            using Error = NetworkMonitorError;
+            if (destination != quietRouteDestination) {
+                spdlog::error("NetworkMonitor: [{}] Unsupported destination: {}",
+                    connectionId, destination);
+                server_->Close(connectionId);
+                connectedClients_.erase(connectionId);
+                return;
+            }
+            spdlog::info("NetworkMonitor: [{}] New message to {}",
+                connectionId, destination);
+            spdlog::debug("NetworkMonitor: Message:\n{}{}", std::setw(4), message);
+            Id startStationId{};
+            Id endStationId{};
+            try {
+                auto messageJson = nlohmann::json::parse(message);
+                startStationId = messageJson.at("start_station_id").get<Id>();
+                endStationId = messageJson.at("end_station_id").get<Id>();
+            }
+            catch (...) {
+                spdlog::error(
+                    "NetworkMonitor: Could not parse quiet-route request:\n{}{}",
+                    std::setw(4), message
+                );
+                server_->Close(connectionId);
+                connectedClients_.erase(connectionId);
+                lastErrorCode_ = Error::kCouldNotParseQuietRouteRequest;
+                return;
+            }
+            auto travelRoute{ network_.GetQuietTravelRoute(
+                startStationId,
+                endStationId,
+                config_.quietRouteMaxSlowdownPc,
+                config_.quietRouteMinQuietnessPc,
+                config_.quietRouteMaxNPaths
+            ) };
+            nlohmann::json travelRouteJson = travelRoute;
+            server_->Send(
+                connectionId,
+                quietRouteDestination,
+                travelRouteJson.dump(),
+                nullptr,
+                requestId
+            );
+            lastErrorCode_ = Error::kOk;
+            lastTravelRoute_ = travelRoute;
+        }
+
+        void OnQuietRouteClientDisconnect(
+            StompServerError ec,
+            const std::string& connectionId
+        )
+        {
+            spdlog::info("NetworkMonitor: [{}] Disconnected from quiet-route",
+                connectionId);
+            connectedClients_.erase(connectionId);
+            lastErrorCode_ = NetworkMonitorError::kStompServerClientDisconnected;
+        }
+
+        void OnQuietRouteDisconnect(
+            StompServerError ec
+        )
+        {
+            spdlog::error("NetworkMonitor: quiet-route server disconnected: {}",
+                ec);
+            lastErrorCode_ = NetworkMonitorError::kStompServerDisconnected;
         }
     };
 
