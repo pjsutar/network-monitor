@@ -2,6 +2,13 @@ cmake_minimum_required(VERSION 3.17 FATAL_ERROR)
 
 project(network-monitor)
 
+# Options
+option(
+    USE_TIMER
+    "Build the network-monitor-* targets with the Timer instances"
+    OFF # Default
+)
+
 # Add the local CMake modules folder to the CMake search path.
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -36,6 +43,7 @@ set(LIB_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/stomp-client.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/stomp-frame.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/stomp-server.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/timer.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/transport-network.cpp"
 )
 add_library(network-monitor STATIC ${LIB_SOURCES})
@@ -44,6 +52,8 @@ target_compile_features(network-monitor
         cxx_std_17
 )
 target_compile_definitions(network-monitor
+    PUBLIC
+        $<$<BOOL:${USE_TIMER}>:NETWORK_MONITOR_TIMER=1>
     PRIVATE
         $<$<PLATFORM_ID:Windows>:_WIN32_WINNT=${WINDOWS_VERSION}>
 )
@@ -70,6 +80,7 @@ set(TESTS_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/stomp-client.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/stomp-frame.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/stomp-server.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/timer.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/transport-network.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/websocket-client.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/websocket-client-mock.cpp"
