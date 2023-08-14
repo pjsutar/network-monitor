@@ -1,0 +1,42 @@
+{
+    "start_station_id": "station_A",
+    "end_station_id": "station_B",
+    "total_travel_time": 12,
+    "steps": [
+        {
+            "start_station_id": "station_A",
+            "end_station_id": "station_0",
+            "line_id": "line_2",
+            "route_id": "route_2",
+            "travel_time": 3
+        },
+        {
+            "start_station_id": "station_0",
+            "end_station_id": "station_1",
+            "line_id": "line_2",
+            "route_id": "route_2",
+            "travel_time": 1
+        },
+        {
+            "start_station_id": "station_1",
+            "end_station_id": "station_5",
+            "line_id": "line_2",
+            "route_id": "route_2",
+            "travel_time": 2
+        },
+        {
+            "start_station_id": "station_5",
+            "end_station_id": "station_6",
+            "line_id": "line_2",
+            "route_id": "route_2",
+            "travel_time": 3
+        },
+        {
+            "start_station_id": "station_6",
+            "end_station_id": "station_B",
+            "line_id": "line_2",
+            "route_id": "route_2",
+            "travel_time": 3
+        }
+    ]
+}
