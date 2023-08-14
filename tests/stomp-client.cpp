@@ -575,7 +575,7 @@ BOOST_AUTO_TEST_CASE(subscribe_to_invalid_endpoint, *timeout{ 1 })
     BOOST_CHECK(calledOnDisconnect);
 }
 
-BOOST_AUTO_TEST_CASE(live, *timeout{ 3 })
+BOOST_AUTO_TEST_CASE(live, *timeout{ 5 })
 {
     const std::string url{ GetEnvVar(
         "LTNM_SERVER_URL",

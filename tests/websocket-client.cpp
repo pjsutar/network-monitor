@@ -641,7 +641,7 @@ bool CheckResponse(const std::string& response)
     return ok;
 }
 
-BOOST_AUTO_TEST_CASE(network_events, *timeout{ 3 })
+BOOST_AUTO_TEST_CASE(network_events, *timeout{ 5 })
 {
     // Connection targets
     const std::string url{ "ltnm.learncppthroughprojects.com" };

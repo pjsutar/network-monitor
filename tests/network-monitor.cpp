@@ -93,7 +93,7 @@ BOOST_AUTO_TEST_CASE(ok)
     BOOST_CHECK_EQUAL(ec, NetworkMonitorError::kOk);
 }
 
-BOOST_AUTO_TEST_CASE(ok_download_file, *timeout{ 5 })
+BOOST_AUTO_TEST_CASE(ok_download_file, *timeout{ 10 })
 {
     // Note: In this test we use a mock but we download the file for real.
     NetworkMonitorConfig config{
