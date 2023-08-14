@@ -1,3 +1,4 @@
+#include <network-monitor/timer.h>
 #include <network-monitor/transport-network.h>
 
 #include <nlohmann/json.hpp>
@@ -524,6 +525,8 @@ TravelRoute TransportNetwork::GetQuietTravelRoute(
     const size_t maxNPaths
 ) const
 {
+    TIMER_START(GetQuietTravelRoute);
+
     // Find the stations.
     const auto stationA{ GetStation(stationAId) };
     const auto stationB{ GetStation(stationBId) };
@@ -550,12 +553,14 @@ TravelRoute TransportNetwork::GetQuietTravelRoute(
 
     // Get all the paths within a certain travel time threshold.
     // These are all valid candidates for the most quiet route.
-    auto paths{ GetFastestTravelRoutes(
-        stationA,
-        stationB,
-        maxSlowdownPc,
-        maxNPaths
-    ) };
+    TIMER_START(GetQuietTravelRoute_routes)
+        auto paths{ GetFastestTravelRoutes(
+            stationA,
+            stationB,
+            maxSlowdownPc,
+            maxNPaths
+        ) };
+    TIMER_STOP(GetQuietTravelRoute_routes);
 
     // Corner case: There is no valid path between A and B.
     if (paths.empty()) {
@@ -572,7 +577,8 @@ TravelRoute TransportNetwork::GetQuietTravelRoute(
     // time, so here we can simply select the path with the lowest passenger
     // count. If the path is not quiet "enough", we just go with the fastest
     // route.
-    spdlog::info("Found {} paths", paths.size());
+    TIMER_START(GetQuietTravelRoute_select)
+        spdlog::info("Found {} paths", paths.size());
     auto& mostQuietPath{ paths.front() }; // Fastest path
     unsigned int minCrowding{ GetPathCrowding(paths.front()) };
     spdlog::info("Fastest path: {} travel time, {} crowding",
@@ -592,11 +598,13 @@ TravelRoute TransportNetwork::GetQuietTravelRoute(
     }
     spdlog::info("Most quiet path: {} travel time, {} crowding",
         mostQuietPath.back().second, minCrowding);
+    TIMER_STOP(GetQuietTravelRoute_select);
 
     // Assemble the path.
     // Note: We go in reverse order, from B to A, because this is how the
     //       previousStop map is structured.
-    const auto& totalTravelTime{ mostQuietPath.back().second };
+    TIMER_START(GetQuietTravelRoute_assemble)
+        const auto& totalTravelTime{ mostQuietPath.back().second };
     TravelRoute travelRoute{
         stationAId,
         stationBId,
@@ -615,6 +623,9 @@ TravelRoute TransportNetwork::GetQuietTravelRoute(
             currStop.edge->travelTime,
             });
     }
+    TIMER_STOP(GetQuietTravelRoute_assemble);
+
+    TIMER_STOP(GetQuietTravelRoute);
     return travelRoute;
 }
 
@@ -877,11 +888,15 @@ std::vector<TransportNetwork::Path> TransportNetwork::GetFastestTravelRoutes(
     const size_t maxNPaths
 ) const
 {
-    // Start by finding the fastest path in the network.
-    const auto fastestPath{ GetFastestTravelRoute(
-        {{stationA, nullptr}, 0},
-        stationB
-    ) };
+    TIMER_START(GetFastestTravelRoutes)
+
+        // Start by finding the fastest path in the network.
+        TIMER_START(GetFastestTravelRoutes_fastest)
+        const auto fastestPath{ GetFastestTravelRoute(
+            {{stationA, nullptr}, 0},
+            stationB
+        ) };
+    TIMER_STOP(GetFastestTravelRoutes_fastest);
     if (fastestPath.empty()) {
         return {};
     }
@@ -899,54 +914,65 @@ std::vector<TransportNetwork::Path> TransportNetwork::GetFastestTravelRoutes(
     // paths (k). Instead, we calculate all paths within a certain travel time.
     // To avoid an excessive amount of calculations, we also limit the total
     // number of paths we find.
-    const auto maxTravelTime{ static_cast<unsigned int>(
-        minTravelTime * (1 + maxSlowdownPc)
-    ) };
+    TIMER_START(GetFastestTravelRoutes_yen)
+        const auto maxTravelTime{ static_cast<unsigned int>(
+            minTravelTime * (1 + maxSlowdownPc)
+        ) };
     while (fastestPaths.size() < maxNPaths) {
-        const auto& lastFastestPath{ fastestPaths.back() };
+        TIMER_START(GetFastestTravelRoutes_yen_iter)
+            const auto& lastFastestPath{ fastestPaths.back() };
 
         // Find all potential paths for the k-th fastest path.
-        for (size_t idx{ 0 }; idx < lastFastestPath.size() - 1; ++idx) {
-            const auto& rootPathStart{ lastFastestPath.begin() };
-            const auto& rootPathEnd{ lastFastestPath.begin() + idx };
-            const auto& spurNode{ lastFastestPath[idx] };
+        TIMER_START(GetFastestTravelRoutes_yen_iter_paths)
+            for (size_t idx{ 0 }; idx < lastFastestPath.size() - 1; ++idx) {
+                const auto& rootPathStart{ lastFastestPath.begin() };
+                const auto& rootPathEnd{ lastFastestPath.begin() + idx };
+                const auto& spurNode{ lastFastestPath[idx] };
 
-            // Remove the links shared between this path and the previous one.
-            std::unordered_set<PathStop, PathStopHash> removedStops;
-            for (const auto& path : fastestPaths) {
-                if (idx < path.size() - 1 &&
-                    std::equal(
-                        path.begin(), path.begin() + idx,
-                        rootPathStart, rootPathEnd
-                    )) {
-                    removedStops.insert(path[idx + 1].first);
+                // Remove the links shared between this path and the previous one.
+                TIMER_START(GetFastestTravelRoutes_yen_iter_paths_rm)
+                    std::unordered_set<PathStop, PathStopHash> removedStops;
+                for (const auto& path : fastestPaths) {
+                    if (idx < path.size() - 1 &&
+                        std::equal(
+                            path.begin(), path.begin() + idx,
+                            rootPathStart, rootPathEnd
+                        )) {
+                        removedStops.insert(path[idx + 1].first);
+                    }
                 }
-            }
+                TIMER_STOP(GetFastestTravelRoutes_yen_iter_paths_rm);
 
-            // Find the shortest path from the spur stop to station B.
-            const auto spurPath{ GetFastestTravelRoute(
-                spurNode,
-                stationB,
-                removedStops
-            ) };
+                // Find the shortest path from the spur stop to station B.
+                TIMER_START(GetFastestTravelRoutes_yen_iter_paths_fastest)
+                    const auto spurPath{ GetFastestTravelRoute(
+                        spurNode,
+                        stationB,
+                        removedStops
+                    ) };
+                TIMER_STOP(GetFastestTravelRoutes_yen_iter_paths_fastest);
 
-            // Assemble the new potential path.
-            // newPath = rootPath + spurPath;
-            if (!spurPath.empty()) {
-                Path newPath{};
-                newPath.reserve(idx + 1 + spurPath.size());
-                newPath.insert(newPath.end(),
-                    rootPathStart, rootPathEnd);
-                newPath.insert(newPath.end(),
-                    spurPath.begin(), spurPath.end());
-                potentialPaths.emplace(std::move(newPath));
+                // Assemble the new potential path.
+                // newPath = rootPath + spurPath;
+                TIMER_START(GetFastestTravelRoutes_yen_iter_paths_assemble)
+                    if (!spurPath.empty()) {
+                        Path newPath{};
+                        newPath.reserve(idx + 1 + spurPath.size());
+                        newPath.insert(newPath.end(),
+                            rootPathStart, rootPathEnd);
+                        newPath.insert(newPath.end(),
+                            spurPath.begin(), spurPath.end());
+                        potentialPaths.emplace(std::move(newPath));
+                    }
+                TIMER_STOP(GetFastestTravelRoutes_yen_iter_paths_assemble);
             }
-        }
+        TIMER_STOP(GetFastestTravelRoutes_yen_iter_paths);
 
         // Select the k-th fastest path from the queue.
         // The priority queue is sorted so that we always process the fastest
         // paths first. We may already have found some of these paths, though.
-        bool kthPathFound{ false };
+        TIMER_START(GetFastestTravelRoutes_yen_iter_kth)
+            bool kthPathFound{ false };
         while (potentialPaths.size() > 0) {
             auto kthPath{ potentialPaths.top() };
             potentialPaths.pop();
@@ -964,11 +990,16 @@ std::vector<TransportNetwork::Path> TransportNetwork::GetFastestTravelRoutes(
                 break;
             }
         }
+        TIMER_STOP(GetFastestTravelRoutes_yen_iter_kth);
+
+        TIMER_STOP(GetFastestTravelRoutes_yen_iter);
         if (!kthPathFound) {
             break;
         }
     }
+    TIMER_STOP(GetFastestTravelRoutes_yen);
 
+    TIMER_STOP(GetFastestTravelRoutes);
     return fastestPaths;
 }
 

@@ -2,6 +2,7 @@
 
 #include <network-monitor/env.h>
 #include <network-monitor/stomp-client.h>
+#include <network-monitor/timer.h>
 #include <network-monitor/websocket-client.h>
 
 #include <boost/asio.hpp>
@@ -20,6 +21,7 @@ using NetworkMonitor::StompClientError;
 using NetworkMonitor::StompCommand;
 using NetworkMonitor::StompError;
 using NetworkMonitor::StompFrame;
+using NetworkMonitor::Timer;
 
 using namespace std::string_literals;
 
@@ -40,6 +42,8 @@ struct StompClientTestFixture {
         MockWebSocketClientForStomp::triggerDisconnection = false;
         MockWebSocketClientForStomp::messageQueue = {};
         MockWebSocketClientForStomp::subscriptionMessages = {};
+
+        Timer::ClearAll();
     }
 };
 

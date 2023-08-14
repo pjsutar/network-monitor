@@ -5,6 +5,7 @@
 #include <network-monitor/stomp-client.h>
 #include <network-monitor/stomp-server.h>
 #include <network-monitor/test-server-certificate.h>
+#include <network-monitor/timer.h>
 #include <network-monitor/transport-network.h>
 
 #include <boost/asio.hpp>
@@ -212,6 +213,7 @@ namespace NetworkMonitor {
                     OnQuietRouteClientConnect(ec, id);
                 },
                 [this](auto ec, auto id, auto dest, auto reqId, auto&& msg) {
+                    TIMER_START(OnQuietRouteClientMessage);
                     OnQuietRouteClientMessage(ec, id, dest, reqId, std::move(msg));
                 },
                 [this](auto ec, auto id) {
@@ -386,6 +388,7 @@ namespace NetworkMonitor {
                     OnSubscribe(ec, std::move(id));
                 },
                 [this](auto ec, auto&& msg) {
+                    TIMER_START(OnNetworkEventsMessage);
                     OnNetworkEventsMessage(ec, std::move(msg));
                 }
             ) };

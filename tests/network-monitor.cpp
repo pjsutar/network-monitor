@@ -5,6 +5,7 @@
 #include <network-monitor/file-downloader.h>
 #include <network-monitor/network-monitor.h>
 #include <network-monitor/stomp-client.h>
+#include <network-monitor/timer.h>
 #include <network-monitor/websocket-client.h>
 #include <network-monitor/websocket-server.h>
 
@@ -35,6 +36,7 @@ using NetworkMonitor::NetworkMonitorError;
 using NetworkMonitor::ParseJsonFile;
 using NetworkMonitor::StompClient;
 using NetworkMonitor::StompClientError;
+using NetworkMonitor::Timer;
 using NetworkMonitor::TravelRoute;
 
 // Use this to set a timeout on tests that may hang or suffer from a slow
@@ -57,6 +59,8 @@ struct NetworkMonitorTestFixture {
         MockWebSocketServerForStomp::triggerDisconnection = false;
         MockWebSocketServerForStomp::runEc = {};
         MockWebSocketServerForStomp::mockEvents = {};
+
+        Timer::ClearAll();
     }
 };
 
@@ -116,7 +120,7 @@ BOOST_AUTO_TEST_CASE(ok)
     BOOST_CHECK_EQUAL(ec, NetworkMonitorError::kOk);
 }
 
-BOOST_AUTO_TEST_CASE(ok_download_file, *timeout{ 3 })
+BOOST_AUTO_TEST_CASE(ok_download_file, *timeout{ 5 })
 {
     // Note: In this test we use a mock but we download the file for real.
     NetworkMonitorConfig config{

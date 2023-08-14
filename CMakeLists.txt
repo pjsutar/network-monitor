@@ -122,6 +122,52 @@ set_tests_properties(network-monitor-tests PROPERTIES
     PASS_REGULAR_EXPRESSION ".*No errors detected"
 )
 
+# Performance tests
+set(PERF_TESTS_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/performance.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/websocket-client-mock.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/websocket-server-mock.cpp"
+)
+add_executable(network-monitor-perf ${PERF_TESTS_SOURCES})
+target_compile_features(network-monitor-perf
+    PRIVATE
+        cxx_std_17
+)
+target_compile_definitions(network-monitor-perf
+    PRIVATE
+        $<$<BOOL:${USE_TIMER}>:NETWORK_MONITOR_TIMER=1>
+        TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/tests/test-data"
+        TESTS_CACERT_PEM="${CMAKE_CURRENT_SOURCE_DIR}/tests/cacert.pem"
+        TESTS_NETWORK_LAYOUT_JSON="${CMAKE_CURRENT_SOURCE_DIR}/tests/network-layout.json"
+        $<$<PLATFORM_ID:Windows>:_WIN32_WINNT=${WINDOWS_VERSION}>
+)
+target_compile_options(network-monitor-perf
+    PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/bigobj>
+)
+target_link_libraries(network-monitor-perf
+    PRIVATE
+        network-monitor
+        Boost::Boost
+        nlohmann_json::nlohmann_json
+        OpenSSL::OpenSSL
+        spdlog::spdlog
+        std::filesystem
+)
+if(USE_TIMER)
+    # When we use the Timer class, we can run this target as a performance test.
+    add_test(
+        NAME network-monitor-perf
+        COMMAND $<TARGET_FILE:network-monitor-perf>
+    )
+    # This tells CMake to check for a specific output to verify the test
+    # outcome.
+    # When all unit tests pass, Boost.Test prints "No errors detected".
+    set_tests_properties(network-monitor-perf PROPERTIES
+        PASS_REGULAR_EXPRESSION ".*No errors detected"
+    )
+endif()
+
 # Executable
 set(EXE_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
