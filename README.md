@@ -1,4 +1,4 @@
-# Live Transport Network Monitor for LTC
+# Live Transport Network Monitor
 
 ## Overview
 
@@ -32,6 +32,7 @@ The primary objectives of this project are to:
 - Quiet routes are offered to a small subset (approximately 20%) of users requesting itinerary recommendations.
 
 ## System Architecture
+![Network Diagram](images/architecture.png)
 
 ### Main Functional Blocks
 
@@ -82,6 +83,7 @@ The primary objectives of this project are to:
 - The project has a solid build system for maintainability.
 
 ## Repository Structure
+```
 network-monitor 
 ├── .gitignore 
 ├── build                     // Build artifacts
@@ -104,6 +106,7 @@ network-monitor
     ├── cacert.pem 
     ├── ***.cpp 
     └── websocket-client.cpp
+```
 
 ### Usage Instructions
 
