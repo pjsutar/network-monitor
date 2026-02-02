@@ -10,7 +10,7 @@ class ConanPackage(ConanFile):
         ('boost/1.74.0'),
         ("libcurl/7.87.0"),
         ("nlohmann_json/3.9.1"),
-        ('openssl/1.1.1h'),
+        ('openssl/1.1.1w'),
         ('spdlog/1.8.1'),
     ]
 
