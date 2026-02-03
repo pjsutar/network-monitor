@@ -1370,7 +1370,9 @@ BOOST_AUTO_TEST_CASE(three_connections, *timeout{ 1 })
 
 BOOST_AUTO_TEST_SUITE_END(); // class_StompServer
 
-BOOST_AUTO_TEST_SUITE(live);
+BOOST_AUTO_TEST_SUITE(live,
+    * boost::unit_test::disabled()
+    * boost::unit_test::description("Requires local server - run manually"));
 
 BOOST_AUTO_TEST_CASE(connect, *timeout{ 2 })
 {

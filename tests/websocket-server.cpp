@@ -626,7 +626,9 @@ BOOST_AUTO_TEST_CASE(OnMessage_three_sessions, *timeout{ 1 })
 
 BOOST_AUTO_TEST_SUITE_END(); // Session
 
-BOOST_AUTO_TEST_SUITE(live);
+BOOST_AUTO_TEST_SUITE(live,
+    * boost::unit_test::disabled()
+    * boost::unit_test::description("Requires local server - run manually"));
 
 BOOST_AUTO_TEST_CASE(client_and_server, *timeout{ 2 })
 {

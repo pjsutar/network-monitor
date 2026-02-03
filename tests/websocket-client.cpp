@@ -569,7 +569,9 @@ BOOST_AUTO_TEST_CASE(close_no_disconnect, *timeout{ 1 })
 
 BOOST_AUTO_TEST_SUITE_END(); // Close
 
-BOOST_AUTO_TEST_SUITE(live);
+BOOST_AUTO_TEST_SUITE(live,
+    * boost::unit_test::disabled()
+    * boost::unit_test::description("Requires external network access"));
 
 BOOST_AUTO_TEST_CASE(echo, *timeout{ 20 })
 {

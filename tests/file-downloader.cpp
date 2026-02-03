@@ -12,7 +12,9 @@ using NetworkMonitor::ParseJsonFile;
 
 BOOST_AUTO_TEST_SUITE(network_monitor);
 
-BOOST_AUTO_TEST_CASE(file_downloader)
+BOOST_AUTO_TEST_CASE(file_downloader,
+    * boost::unit_test::disabled()
+    * boost::unit_test::description("Requires external network access"))
 {
     const std::string fileUrl{
         "https://ltnm.learncppthroughprojects.com/network-layout.json"
