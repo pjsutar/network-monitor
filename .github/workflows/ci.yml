@@ -54,10 +54,13 @@
         - name: Run unit tests (excluding live tests)
           working-directory: build
           run: |
-            # Exclude tests that need external network access:
-            # - **/live: any test suite named 'live' at any nesting level
-            # - network_monitor/file_downloader: downloads from external URL
-            ./network-monitor-tests --run_test=!**/live:!network_monitor/file_downloader --log_level=test_suite
+            # Exclude tests requiring external network/credentials:
+            ./network-monitor-tests \
+              --run_test=!network_monitor/file_downloader \
+              --run_test=!network_monitor/class_WebSocketServer/live \
+              --run_test=!network_monitor/class_StompClient/live \
+              --run_test=!network_monitor/class_NetworkMonitor/live \
+              --log_level=test_suite
 
     performance-tests:
       runs-on: ubuntu-22.04
