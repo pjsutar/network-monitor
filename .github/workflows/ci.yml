@@ -55,9 +55,9 @@
           working-directory: build
           run: |
             # Exclude tests that need external network access:
-            # - */live: tests that connect to live STOMP server
-            # - file_downloader: downloads from external URL
-            ./network-monitor-tests --run_test=!*/live:!network_monitor/file_downloader --log_level=test_suite
+            # - **/live: any test suite named 'live' at any nesting level
+            # - network_monitor/file_downloader: downloads from external URL
+            ./network-monitor-tests --run_test=!**/live:!network_monitor/file_downloader --log_level=test_suite
 
     performance-tests:
       runs-on: ubuntu-22.04
