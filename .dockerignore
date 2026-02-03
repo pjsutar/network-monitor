@@ -1,0 +1,28 @@
+  # Build artifacts
+  build/
+  out/
+  CMakeCache.txt
+  CMakeFiles/
+
+  # IDE files
+  .vs/
+  .vscode/
+  *.vcxproj*
+  *.sln
+
+  # Git
+  .git/
+  .gitignore
+
+  # Tests (not needed in production image)
+  tests/test-data/
+  tests/*.cpp
+  tests/CMakeLists.txt
+
+  # Documentation
+  *.md
+  images/
+
+  # OS files
+  Thumbs.db
+  .DS_Store
