@@ -945,7 +945,10 @@ BOOST_AUTO_TEST_CASE(quiet_route_ltc_quiet2, *timeout{ 10 })
     BOOST_CHECK_EQUAL(travelRoute, golden);
 }
 
-BOOST_AUTO_TEST_CASE(live, *timeout{ 10 })
+BOOST_AUTO_TEST_CASE(live,
+    * boost::unit_test::disabled()
+    * boost::unit_test::description("Requires credentials and external network")
+    * timeout{ 10 })
 {
     // This test starts a live NetworkMonitor instance and then constructs a
     // local StompClient instance to connect to it. We perform one quiet-route
