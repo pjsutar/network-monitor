@@ -1,0 +1,106 @@
+  name: CI
+
+  on:
+    push:
+      branches: [main]
+    pull_request:
+      branches: [main]
+
+  env:
+    BUILD_TYPE: Release
+
+  jobs:
+    build-and-test:
+      runs-on: ubuntu-22.04
+
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Install system dependencies
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y cmake ninja-build python3-pip
+
+        - name: Install Conan
+          run: |
+            pip install conan==1.64.0
+            conan profile new default --detect
+            conan profile update settings.compiler.libcxx=libstdc++11 default
+
+        - name: Cache Conan packages
+          uses: actions/cache@v4
+          with:
+            path: ~/.conan/data
+            key: conan-${{ runner.os }}-${{ hashFiles('conanfile.py') }}
+            restore-keys: |
+              conan-${{ runner.os }}-
+
+        - name: Create build directory
+          run: mkdir -p build
+
+        - name: Install dependencies with Conan
+          working-directory: build
+          run: conan install .. --build=missing
+
+        - name: Configure CMake
+          working-directory: build
+          run: cmake .. -GNinja -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+
+        - name: Build
+          working-directory: build
+          run: ninja
+
+        - name: Run unit tests (excluding live tests)
+          working-directory: build
+          run: |
+            # Run tests excluding 'live' test cases that need real credentials
+            ./network-monitor-tests --run_test=!*/live --log_level=test_suite
+
+    performance-tests:
+      runs-on: ubuntu-22.04
+
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Install system dependencies
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y cmake ninja-build python3-pip
+
+        - name: Install Conan
+          run: |
+            pip install conan==1.64.0
+            conan profile new default --detect
+            conan profile update settings.compiler.libcxx=libstdc++11 default
+
+        - name: Cache Conan packages
+          uses: actions/cache@v4
+          with:
+            path: ~/.conan/data
+            key: conan-${{ runner.os }}-${{ hashFiles('conanfile.py') }}
+            restore-keys: |
+              conan-${{ runner.os }}-
+
+        - name: Create build directory
+          run: mkdir -p build
+
+        - name: Install dependencies with Conan
+          working-directory: build
+          run: conan install .. --build=missing
+
+        - name: Configure CMake with Timer
+          working-directory: build
+          run: cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release -DUSE_TIMER=ON
+
+        - name: Build
+          working-directory: build
+          run: ninja
+
+        - name: Run performance tests
+          working-directory: build
+          run: |
+            # Performance tests use mocks, no credentials needed
+            ./network-monitor-perf --log_level=test_suite
+          timeout-minutes: 3
