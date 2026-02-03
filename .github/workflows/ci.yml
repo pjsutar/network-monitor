@@ -54,8 +54,10 @@
         - name: Run unit tests (excluding live tests)
           working-directory: build
           run: |
-            # Run tests excluding 'live' test cases that need real credentials
-            ./network-monitor-tests --run_test=!*/live --log_level=test_suite
+            # Exclude tests that need external network access:
+            # - */live: tests that connect to live STOMP server
+            # - file_downloader: downloads from external URL
+            ./network-monitor-tests --run_test=!*/live:!network_monitor/file_downloader --log_level=test_suite
 
     performance-tests:
       runs-on: ubuntu-22.04
