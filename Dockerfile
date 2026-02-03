@@ -35,6 +35,7 @@
   COPY cmake/ cmake/
   COPY inc/ inc/
   COPY src/ src/
+  COPY tests/ tests/
 
   # Build the application
   RUN cd build \

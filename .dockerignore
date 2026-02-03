@@ -16,8 +16,8 @@
 
   # Tests (not needed in production image)
   tests/test-data/
-  tests/*.cpp
-  tests/CMakeLists.txt
+  #tests/*.cpp
+  #tests/CMakeLists.txt
 
   # Documentation
   *.md
